@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% set current_step = 0 %}
+
+{% block title %} — 로그인{% endblock %}
+
+{% block head %}
+<style>
+    .auth-wrap {
+        min-height: calc(100vh - 104px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 48px 24px;
+    }
+    .auth-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 44px 40px;
+        width: 100%; max-width: 400px;
+    }
+    .auth-title {
+        font-size: 22px; font-weight: 700;
+        letter-spacing: -0.5px; margin-bottom: 6px;
+    }
+    .auth-sub {
+        font-size: 14px; color: var(--text-muted); margin-bottom: 32px;
+    }
+
+    .form-field { margin-bottom: 16px; }
+    .form-label {
+        display: block; font-size: 13px; font-weight: 500;
+        color: var(--text-muted); margin-bottom: 6px;
+    }
+    .form-input {
+        width: 100%; padding: 11px 14px;
+        border: 1px solid var(--border); border-radius: 7px;
+        font-size: 15px; font-family: inherit; color: var(--text);
+        background: var(--bg);
+        transition: border-color 0.15s;
+        outline: none;
+    }
+    .form-input:focus { border-color: #b0a89e; background: #fff; }
+    .form-input::placeholder { color: var(--text-faint); }
+
+    .btn-submit {
+        width: 100%; padding: 13px;
+        background: var(--text); color: #fff;
+        border: none; border-radius: 7px;
+        font-size: 15px; font-weight: 500;
+        font-family: inherit; cursor: pointer;
+        transition: background 0.15s; margin-top: 8px;
+    }
+    .btn-submit:hover { background: #2a2520; }
+
+    .auth-footer {
+        text-align: center; margin-top: 24px;
+        font-size: 13px; color: var(--text-muted);
+    }
+    .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .auth-footer a:hover { text-decoration: underline; }
+
+    .divider {
+        display: flex; align-items: center; gap: 12px;
+        margin: 28px 0;
+    }
+    .divider::before, .divider::after {
+        content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .divider span { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+    <div class="auth-card">
+        <div class="auth-title">다시 만나서 반가워요</div>
+        <div class="auth-sub">닉네임과 비밀번호로 로그인하세요</div>
+
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/login">
+            <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+            <div class="form-field">
+                <label class="form-label" for="nickname">닉네임</label>
+                <input class="form-input" type="text" id="nickname" name="nickname"
+                       placeholder="닉네임 입력" autocomplete="username" required>
+            </div>
+            <div class="form-field">
+                <label class="form-label" for="password">비밀번호</label>
+                <input class="form-input" type="password" id="password" name="password"
+                       placeholder="비밀번호 입력" autocomplete="current-password" required>
+            </div>
+            <button class="btn-submit" type="submit">로그인</button>
+        </form>
+
+        <div class="divider"><span>또는</span></div>
+
+        <div class="auth-footer">
+            아직 계정이 없으신가요? <a href="/signup">회원가입</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% set current_step = 4 %}
+
+{% block title %} — 추천 지도{% endblock %}
+
+{% block head %}
+<style>
+    .map-header {
+        display: flex; justify-content: space-between;
+        align-items: flex-start; margin-bottom: 18px;
+        flex-wrap: wrap; gap: 12px;
+    }
+
+    .legend { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; padding-top: 6px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-muted); }
+    .legend-dot { width: 11px; height: 11px; border-radius: 50%; }
+    .legend-dot.liked { background: var(--accent); }
+    .legend-dot.rec   { background: #f07b5c; }
+    .legend-dot.other { background: var(--border); }
+
+    .map-card { padding: 0; overflow: hidden; }
+    #map-svg-wrap { width: 100%; background: var(--surface); position: relative; }
+    #map-svg { width: 100%; display: block; cursor: default; }
+
+    /* ── 포스터 툴팁 ── */
+    .map-tooltip {
+        position: fixed;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        display: none;
+        z-index: 9999;
+        pointer-events: none;
+        box-shadow: 0 8px 32px rgba(100, 80, 200, 0.18);
+        width: 130px;
+        transform: translate(-50%, calc(-100% - 14px));
+    }
+    .map-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%; left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--border);
+    }
+    .map-tooltip::before {
+        content: '';
+        position: absolute;
+        top: calc(100% - 1px); left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--surface);
+        z-index: 1;
+    }
+    .tt-poster {
+        width: 100%; aspect-ratio: 2/3; object-fit: cover;
+        border-radius: 7px; display: block;
+        background: var(--tag-bg); margin-bottom: 8px;
+    }
+    .tt-no-poster {
+        width: 100%; aspect-ratio: 2/3; border-radius: 7px;
+        background: var(--tag-bg); display: flex;
+        align-items: center; justify-content: center;
+        margin-bottom: 8px; padding: 8px;
+    }
+    .tt-title {
+        font-size: 12px; font-weight: 500; color: var(--text);
+        line-height: 1.35; text-align: center;
+        display: -webkit-box; -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .tt-kind {
+        font-size: 11px; text-align: center; margin-top: 5px;
+        font-weight: 600;
+    }
+    .tt-kind.liked { color: var(--accent); }
+    .tt-kind.rec   { color: #f07b5c; }
+
+    /* ── 축 설명 ── */
+    .axis-legend {
+        margin-top: 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 20px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 24px;
+    }
+    .axis-item { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+    .axis-item strong { color: var(--text); font-weight: 600; }
+    .axis-badge {
+        display: inline-block;
+        font-size: 11px; font-weight: 600;
+        padding: 1px 8px; border-radius: 12px;
+        background: var(--accent-light); color: var(--accent);
+        margin-right: 6px; vertical-align: middle;
+    }
+
+    .help-note { font-size: 12px; color: var(--text-faint); margin-top: 12px; text-align: center; }
+    .nav-buttons { display: flex; justify-content: space-between; margin-top: 18px; }
+
+    @media (max-width: 640px) {
+        .axis-legend { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:1100px">
+    <div class="map-header">
+        <div>
+            <h1 class="page-title">당신만의 추천 지도</h1>
+            <p class="page-sub" style="margin-bottom:0">작품 위에 커서를 올리면 포스터가 나타나요</p>
+        </div>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot liked"></div>내가 좋아한 작품</div>
+            <div class="legend-item"><div class="legend-dot rec"></div>추천 작품 (클릭 가능)</div>
+            <div class="legend-item"><div class="legend-dot other"></div>기타 작품</div>
+        </div>
+    </div>
+
+    <div class="card map-card">
+        <div id="map-svg-wrap">
+            <svg id="map-svg" viewBox="0 0 820 560"></svg>
+        </div>
+    </div>
+
+    <!-- 포스터 툴팁 -->
+    <div class="map-tooltip" id="map-tooltip">
+        <div id="tt-media"></div>
+        <div class="tt-title" id="tt-title"></div>
+        <div class="tt-kind" id="tt-kind"></div>
+    </div>
+
+    <!-- 축 설명 -->
+    <div class="axis-legend">
+        <div class="axis-item">
+            <span class="axis-badge">X 축</span>
+            <strong>분위기</strong><br>
+            왼쪽(←) 밝고 유쾌한 감성 &nbsp;→&nbsp; 오른쪽(→) 어둡고 진지한 분위기
+        </div>
+        <div class="axis-item">
+            <span class="axis-badge">Y 축</span>
+            <strong>세계관</strong><br>
+            위쪽(↑) 환상적·모험적 세계 &nbsp;→&nbsp; 아래쪽(↓) 현실적·일상적 배경
+        </div>
+    </div>
+
+    <p class="help-note">추천 작품(주황 점)을 클릭해 상세 정보를 확인해보세요</p>
+
+    <div class="nav-buttons">
+        <button class="btn-outline" onclick="history.back()">← 분석 결과</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const likedIds = JSON.parse(localStorage.getItem('liked_ids') || '[]');
+    const recs     = JSON.parse(localStorage.getItem('recommendations') || '[]');
+    const recIds   = recs.map(r => r.movieId);
+
+    async function loadMap() {
+        const params = new URLSearchParams();
+        likedIds.forEach(id => params.append('liked', id));
+        recIds.forEach(id   => params.append('rec',   id));
+        const res    = await fetch('/api/map?' + params.toString());
+        const points = await res.json();
+        drawMap(points);
+    }
+
+    /* ── 랭크 정규화 (균등 분포) ── */
+    function rankNormalize(arr) {
+        const n      = arr.length;
+        const sorted = arr.map((v, i) => ({v, i})).sort((a, b) => a.v - b.v);
+        const out    = new Array(n);
+        sorted.forEach(({i}, rank) => { out[i] = rank / (n - 1); });
+        return out;
+    }
+
+    function cleanTitle(t) {
+        return t.replace(/,\s*(The|A|An)\b/i, '').replace(/\s*\(\d{4}\).*/, '').trim();
+    }
+
+    function drawMap(points) {
+        const W = 820, H = 560, PAD = 68;
+
+        /* 랭크 정규화로 고르게 분포 */
+        const rawX = points.map(p => p.x);
+        const rawY = points.map(p => p.y);
+        const normX = rankNormalize(rawX);
+        const normY = rankNormalize(rawY);
+        points.forEach((p, i) => {
+            p._nx = normX[i];
+            p._ny = normY[i];
+        });
+
+        const scaleX = n => PAD + n * (W - PAD * 2);
+        const scaleY = n => H - PAD - n * (H - PAD * 2);   // y 반전 (위가 높음)
+
+        const svg     = document.getElementById('map-svg');
+        const tooltip = document.getElementById('map-tooltip');
+        const ttMedia = document.getElementById('tt-media');
+        const ttTitle = document.getElementById('tt-title');
+        const ttKind  = document.getElementById('tt-kind');
+        const wrap    = document.getElementById('map-svg-wrap');
+
+        svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+        /* ── 배경 격자 ── */
+        for (let i = 1; i < 5; i++) {
+            const gx = PAD + (W - PAD * 2) * i / 4;
+            const gy = PAD + (H - PAD * 2) * i / 4;
+            const mkLine = (x1,y1,x2,y2) => {
+                const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+                l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+                l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+                l.setAttribute('stroke','#ede8ff'); l.setAttribute('stroke-width','1');
+                svg.appendChild(l);
+            };
+            if (i < 4) mkLine(gx, PAD, gx, H - PAD);  // 수직 (마지막은 Y축 겹침)
+            if (i < 4) mkLine(PAD, gy, W - PAD, gy);   // 수평 (마지막은 X축 겹침)
+        }
+
+        /* ── ㄴ자 축선 ── */
+        const addLine = (x1,y1,x2,y2) => {
+            const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+            l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+            l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+            l.setAttribute('stroke','#a89fc8'); l.setAttribute('stroke-width','1.8');
+            svg.appendChild(l);
+        };
+        addLine(PAD, H-PAD, W-PAD+12, H-PAD);  // X축 (하단)
+        addLine(PAD, PAD-12, PAD, H-PAD);       // Y축 (왼쪽)
+
+        /* 화살표 */
+        const addArrow = (pts) => {
+            const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+            poly.setAttribute('points', pts);
+            poly.setAttribute('fill','#a89fc8');
+            svg.appendChild(poly);
+        };
+        addArrow(`${W-PAD+14},${H-PAD} ${W-PAD+2},${H-PAD-5} ${W-PAD+2},${H-PAD+5}`); // →
+        addArrow(`${PAD},${PAD-14} ${PAD-5},${PAD-2} ${PAD+5},${PAD-2}`);               // ↑
+
+        /* 축 레이블 */
+        const addText = (x, y, text, anchor='middle', fill='#8b7fba', size=11) => {
+            const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+            t.setAttribute('x',x); t.setAttribute('y',y);
+            t.setAttribute('font-size',size); t.setAttribute('fill',fill);
+            t.setAttribute('text-anchor',anchor);
+            t.setAttribute('font-family','Noto Sans KR, sans-serif');
+            t.textContent = text;
+            svg.appendChild(t);
+        };
+        // X축: 하단, 양 끝 (분위기)
+        addText(PAD + 4,     H-PAD+20, '밝고 유쾌함',   'start');
+        addText(W-PAD + 4,   H-PAD+20, '어둡고 진지함', 'end');
+        // Y축: 왼쪽, 위아래 끝 (세계관)
+        addText(PAD,         PAD-22,   '환상·모험적', 'middle');
+        addText(PAD-6,       H-PAD-6,  '현실·일상',  'end');
+
+        /* 점 그리기: other → liked → rec 순 */
+        const order = {other:0, liked:1, rec:2};
+        points.sort((a,b) => order[a.kind] - order[b.kind]);
+
+        points.forEach(p => {
+            const cx = scaleX(p._nx);
+            const cy = scaleY(p._ny);
+
+            const isLiked = p.kind === 'liked';
+            const isRec   = p.kind === 'rec';
+            const isOther = p.kind === 'other';
+
+            const r = isOther ? 3.5 : 7;
+
+            /* 추천·좋아함 강조 링 */
+            if (!isOther) {
+                const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+                ring.setAttribute('cx', cx); ring.setAttribute('cy', cy);
+                ring.setAttribute('r', r + 4);
+                ring.setAttribute('fill', isLiked ? 'rgba(123,92,240,0.15)' : 'rgba(240,123,92,0.15)');
+                svg.appendChild(ring);
+            }
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+            circle.setAttribute('cx', cx); circle.setAttribute('cy', cy);
+            circle.setAttribute('r', r);
+            circle.setAttribute('fill',
+                isLiked ? '#7b5cf0' : isRec ? '#f07b5c' : '#ddd6fe');
+            circle.setAttribute('opacity', isOther ? '0.55' : '1');
+            circle.style.cursor = isRec ? 'pointer' : 'default';
+            svg.appendChild(circle);
+
+            /* 툴팁 이벤트 */
+            const title = cleanTitle(p.title);
+
+            circle.addEventListener('mouseenter', (e) => {
+                /* 포스터 또는 플레이스홀더 */
+                if (p.poster) {
+                    ttMedia.innerHTML =
+                        `<img class="tt-poster" src="${p.poster}" alt=""
+                              onerror="this.outerHTML='<div class=tt-no-poster><span style=font-size:11px;color:var(--text-faint)>${title}</span></div>'">`;
+                } else {
+                    ttMedia.innerHTML =
+                        `<div class="tt-no-poster">
+                             <span style="font-size:11px;color:var(--text-faint)">${title}</span>
+                         </div>`;
+                }
+                ttTitle.textContent = title;
+                ttKind.className = 'tt-kind ' + p.kind;
+                ttKind.textContent = isLiked ? '⭐ 좋아한 작품' : isRec ? '✦ 추천 작품' : '';
+
+                positionTooltip(e);
+                tooltip.style.display = 'block';
+            });
+
+            circle.addEventListener('mousemove', positionTooltip);
+
+            circle.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+
+            if (isRec) {
+                circle.addEventListener('click', () => {
+                    window.location.href = '/movie/' + p.movieId;
+                });
+            }
+        });
+    }
+
+    function positionTooltip(e) {
+        const tooltip = document.getElementById('map-tooltip');
+        const tw = 150;   // tooltip width
+        const th = 220;   // approximate height (2/3 poster + title)
+        const margin = 14;
+
+        let left = e.clientX;
+        let top  = e.clientY - margin;
+
+        /* 화면 위 공간 부족하면 아래로 */
+        if (top - th < 10) {
+            tooltip.style.transform = 'translate(-50%, 14px)';
+        } else {
+            tooltip.style.transform = 'translate(-50%, calc(-100% - 14px))';
+        }
+
+        /* 좌우 경계 처리 */
+        left = Math.max(tw/2 + 10, Math.min(window.innerWidth - tw/2 - 10, left));
+
+        tooltip.style.left = left + 'px';
+        tooltip.style.top  = top  + 'px';
+    }
+
+    loadMap();
+</script>
+{% endblock %}

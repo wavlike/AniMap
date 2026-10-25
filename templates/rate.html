@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% set current_step = 2 %}
+
+{% block title %} — 평가{% endblock %}
+
+{% block head %}
+<style>
+    .rate-header {
+        display: flex; align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+    }
+    .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+
+    .movies-row {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+
+    .movie-card-rate {
+        background: var(--surface);
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        transition: border-color 0.15s;
+    }
+    .movie-card-rate:hover { border-color: #b0a89e; }
+    .movie-card-rate.rated { border-color: var(--accent); }
+
+    .movie-card-rate img {
+        width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block;
+        background: var(--tag-bg);
+    }
+    .no-poster-r {
+        width: 100%; aspect-ratio: 2/3; background: var(--tag-bg);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text-faint); font-size: 11px; text-align: center; padding: 10px;
+    }
+    .card-body { padding: 10px 10px 12px; }
+    .card-title { font-size: 12px; font-weight: 500; line-height: 1.35; margin-bottom: 4px; min-height: 32px; }
+    .card-year { font-size: 11px; color: var(--text-faint); margin-bottom: 8px; }
+
+    .stars { display: flex; gap: 2px; justify-content: center; }
+    .star {
+        font-size: 19px; cursor: pointer; color: #d9d2c9;
+        transition: color 0.1s, transform 0.1s; line-height: 1;
+    }
+    .star:hover, .star.on { color: #d4823a; }
+    .star:hover { transform: scale(1.15); }
+
+    .bottom-row {
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 12px;
+    }
+    .rated-note { font-size: 13px; color: var(--text-faint); }
+    .rated-note strong { color: var(--text-muted); }
+
+    .login-tip {
+        font-size: 12px; color: var(--text-faint);
+        padding: 8px 14px; background: var(--tag-bg);
+        border-radius: 6px; border: 1px solid var(--border);
+    }
+    .login-tip a { color: var(--accent); text-decoration: none; }
+
+    @media (max-width: 700px) {
+        .movies-row { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="rate-header">
+        <div>
+            <div class="active-filters" id="active-filters"></div>
+        </div>
+        <button class="btn-outline" onclick="shuffleMovies()">↺ 새로 섞기</button>
+    </div>
+
+    <div class="card" style="margin-bottom:18px;">
+        <p style="font-size:15px; font-weight:600; margin-bottom:3px;">5개 이상의 작품을 평가해주세요</p>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">
+            별점을 주면 취향을 분석해 비슷한 작품을 추천해드려요
+        </p>
+        <div class="movies-row" id="movies-row">
+            <div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-faint);">
+                불러오는 중…
+            </div>
+        </div>
+    </div>
+
+    {% if not session.get('user_id') %}
+    <div class="login-tip" style="margin-bottom:16px;">
+        <a href="/login">로그인</a>하면 평가 기록이 저장돼요
+    </div>
+    {% endif %}
+
+    <div class="bottom-row">
+        <div class="rated-note">총 <strong id="rated-count">0</strong>편 평가됨</div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-outline" onclick="history.back()">← 조건 변경</button>
+            <button class="btn-primary" id="done-btn" disabled onclick="goAnalyze()">
+                평가 완료 →
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const IS_LOGGED_IN = {{ session.get('user_id') is not none | tojson }};
+    const conditions   = JSON.parse(localStorage.getItem('conditions') || '[]');
+    const ratings      = JSON.parse(localStorage.getItem('ratings')   || '{}');
+    let allMovies = [], shownIds = new Set();
+
+    const COND_LABEL = {
+        '여성':'여성 주연','2D':'2D 애니','3D':'3D 애니','성장':'성장 테마',
+        '모험':'모험','판타지':'판타지','가족':'가족','로맨스':'로맨스',
+        '코미디':'코미디','드라마':'드라마','음악':'음악','SF':'SF'
+    };
+
+    function cleanTitle(t) {
+        return t.replace(/,\s*(The|A|An)\b/i,' $1').replace(/\s*\(\d{4}\).*$/,'').trim();
+    }
+    function getYear(t) { const m = t.match(/\((\d{4})\)/); return m ? m[1] : ''; }
+
+    async function loadMovies() {
+        const params = new URLSearchParams();
+        conditions.forEach(c => params.append('condition', c));
+        const res  = await fetch('/api/movies?' + params.toString());
+        const data = await res.json();
+        allMovies  = data.movies;
+
+        const filterEl = document.getElementById('active-filters');
+        conditions.forEach(c => {
+            filterEl.insertAdjacentHTML('beforeend',
+                `<span class="tag-pill">${COND_LABEL[c] || c}</span>`);
+        });
+        showMovies();
+    }
+
+    function showMovies() {
+        const pool     = allMovies.filter(m => !shownIds.has(m.movieId) || ratings[m.movieId]);
+        const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, 5);
+        shuffled.forEach(m => shownIds.add(m.movieId));
+        renderCards(shuffled);
+    }
+
+    function shuffleMovies() {
+        const unrated = allMovies.filter(m => !ratings[m.movieId]);
+        const pool    = unrated.length >= 5 ? unrated : allMovies;
+        renderCards(pool.sort(() => Math.random() - 0.5).slice(0, 5));
+    }
+
+    function renderCards(movies) {
+        const row = document.getElementById('movies-row');
+        row.innerHTML = movies.map(m => `
+            <div class="movie-card-rate ${ratings[m.movieId] ? 'rated' : ''}" data-id="${m.movieId}">
+                ${m.poster
+                    ? `<img src="${m.poster}" alt="" loading="lazy"
+                           onerror="this.outerHTML='<div class=no-poster-r>${cleanTitle(m.title)}</div>'">`
+                    : `<div class="no-poster-r">${cleanTitle(m.title)}</div>`}
+                <div class="card-body">
+                    <div class="card-title">${cleanTitle(m.title)}</div>
+                    <div class="card-year">${getYear(m.title)}</div>
+                    <div class="stars" data-id="${m.movieId}">
+                        ${[1,2,3,4,5].map(n =>
+                            `<span class="star${(ratings[m.movieId]||0) >= n ? ' on' : ''}" data-n="${n}">★</span>`
+                        ).join('')}
+                    </div>
+                </div>
+            </div>`
+        ).join('');
+
+        row.querySelectorAll('.stars').forEach(starsEl => {
+            const mid  = parseInt(starsEl.dataset.id);
+            const card = row.querySelector(`.movie-card-rate[data-id="${mid}"]`);
+            starsEl.querySelectorAll('.star').forEach(star => {
+                star.addEventListener('mouseenter', () => {
+                    const n = parseInt(star.dataset.n);
+                    starsEl.querySelectorAll('.star').forEach((s, i) => s.classList.toggle('on', i < n));
+                });
+                star.addEventListener('mouseleave', () => {
+                    const cur = ratings[mid] || 0;
+                    starsEl.querySelectorAll('.star').forEach((s, i) => s.classList.toggle('on', i < cur));
+                });
+                star.addEventListener('click', () => {
+                    const n = parseInt(star.dataset.n);
+                    ratings[mid] = n;
+                    localStorage.setItem('ratings', JSON.stringify(ratings));
+                    starsEl.querySelectorAll('.star').forEach((s, i) => s.classList.toggle('on', i < n));
+                    card.classList.add('rated');
+                    updateRatedCount();
+                });
+            });
+        });
+    }
+
+    function updateRatedCount() {
+        const count = Object.keys(ratings).length;
+        document.getElementById('rated-count').textContent = count;
+        document.getElementById('done-btn').disabled = count === 0;
+    }
+
+    function goAnalyze() { window.location.href = '/analyze'; }
+
+    loadMovies();
+    updateRatedCount();
+</script>
+{% endblock %}

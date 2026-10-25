@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% set current_step = 5 %}
+
+{% block title %} — 작품 정보{% endblock %}
+
+{% block head %}
+<style>
+    .movie-layout {
+        display: grid;
+        grid-template-columns: 210px 1fr;
+        gap: 28px;
+    }
+
+    /* 포스터 */
+    .poster-col img {
+        width: 100%; border-radius: 8px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        aspect-ratio: 2/3; object-fit: cover;
+    }
+    .no-poster-m {
+        width: 100%; aspect-ratio: 2/3; border-radius: 8px;
+        background: var(--tag-bg);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text-faint); font-size: 13px;
+        text-align: center; padding: 16px;
+    }
+    .watchlist-btn {
+        width: 100%; margin-top: 10px; padding: 10px;
+        border: 1px solid var(--border); border-radius: 7px;
+        background: transparent; color: var(--text-muted);
+        font-size: 13px; cursor: pointer; font-family: inherit;
+        transition: all 0.2s; display: flex; align-items: center;
+        justify-content: center; gap: 6px;
+    }
+    .watchlist-btn:hover  { border-color: var(--accent); color: var(--accent); }
+    .watchlist-btn.added  { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .watchlist-btn.added:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .watchlist-btn.loading { opacity: 0.6; cursor: wait; }
+
+    /* 정보 */
+    .info-col .movie-title-big {
+        font-size: 26px; font-weight: 700; line-height: 1.25;
+        margin-bottom: 4px; letter-spacing: -0.5px;
+    }
+    .info-col .movie-year-big { font-size: 14px; color: var(--text-faint); margin-bottom: 4px; }
+    .info-col .studio-tag {
+        display: inline-block; font-size: 13px; color: var(--accent);
+        font-weight: 500; margin-bottom: 16px;
+    }
+
+    .rating-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .rating-big { font-size: 22px; font-weight: 700; }
+    .rating-max { font-size: 14px; color: var(--text-faint); }
+    .stars-disp { color: #d4823a; font-size: 16px; letter-spacing: 2px; }
+    .rating-count-sm { font-size: 12px; color: var(--text-faint); }
+
+    .overview-text { font-size: 14px; line-height: 1.85; color: var(--text-muted); margin-bottom: 20px; }
+
+    .meta-table { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; font-size: 13px; margin-bottom: 20px; }
+    .meta-key { color: var(--text-faint); white-space: nowrap; }
+    .meta-val { color: var(--text); }
+
+    /* 탭 */
+    .tabs {
+        display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; gap: 0;
+    }
+    .tab-btn {
+        padding: 9px 18px; font-size: 14px; font-weight: 400;
+        background: none; border: none; cursor: pointer;
+        color: var(--text-faint); font-family: inherit;
+        border-bottom: 2px solid transparent; margin-bottom: -1px;
+        transition: all 0.15s;
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* 추천 이유 */
+    .match-circle {
+        width: 90px; height: 90px; border-radius: 50%;
+        border: 3px solid var(--accent);
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; margin-bottom: 16px; flex-shrink: 0;
+    }
+    .match-pct   { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1; }
+    .match-label { font-size: 11px; color: var(--text-faint); }
+
+    .reason-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-muted); }
+    .reason-list  { list-style: none; display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+    .reason-list li {
+        display: flex; align-items: center; justify-content: space-between;
+        font-size: 13px; padding: 8px 12px;
+        background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+    }
+    .check { color: var(--accent); margin-right: 8px; }
+    .score { color: var(--text-faint); font-size: 12px; }
+    .diff-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .diff-list li {
+        font-size: 13px; color: var(--text-muted);
+        padding: 7px 12px; background: var(--bg);
+        border: 1px solid var(--border); border-radius: 7px;
+    }
+    .diff-list li::before { content: '→ '; color: var(--text-faint); }
+
+    /* 다른 추천 */
+    .rec-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 12px; margin-top: 8px;
+    }
+    .rec-card {
+        border-radius: 8px; overflow: hidden; background: var(--surface);
+        border: 1px solid var(--border); cursor: pointer; transition: all 0.15s;
+    }
+    .rec-card:hover { border-color: #b0a89e; transform: translateY(-2px); }
+    .rec-card img   { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: var(--tag-bg); }
+    .rec-card .rc-info { padding: 8px; font-size: 12px; font-weight: 500; color: var(--text); }
+
+    @media (max-width: 640px) {
+        .movie-layout { grid-template-columns: 1fr; }
+        .poster-col   { max-width: 180px; margin: 0 auto; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div id="loading" style="text-align:center;padding:60px;color:var(--text-faint);">불러오는 중…</div>
+    <div id="content" style="display:none">
+
+        <div class="movie-layout">
+            <!-- 포스터 -->
+            <div class="poster-col">
+                <div id="poster-wrap"></div>
+                <button class="watchlist-btn" id="watchlist-btn" onclick="toggleWatchlist()">
+                    + 보고싶어요
+                </button>
+            </div>
+
+            <!-- 정보 -->
+            <div class="info-col">
+                <div class="movie-title-big" id="m-title"></div>
+                <div class="movie-year-big" id="m-year"></div>
+                <span class="studio-tag" id="m-studio"></span>
+
+                <div class="rating-row">
+                    <div class="rating-big" id="m-rating"></div>
+                    <div class="rating-max">/ 5.0</div>
+                    <div class="stars-disp" id="m-stars"></div>
+                    <div class="rating-count-sm" id="m-count"></div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('info', this)">작품 정보</button>
+                    <button class="tab-btn" onclick="switchTab('reason', this)">추천 이유</button>
+                </div>
+
+                <div class="tab-panel active" id="tab-info">
+                    <p class="overview-text" id="m-overview"></p>
+                    <div class="meta-table" id="m-meta"></div>
+                </div>
+
+                <div class="tab-panel" id="tab-reason">
+                    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+                        <div class="match-circle">
+                            <div class="match-pct" id="r-pct">—</div>
+                            <div class="match-label">일치도</div>
+                        </div>
+                        <div style="flex:1;min-width:200px">
+                            <div class="reason-title">공통점</div>
+                            <ul class="reason-list" id="r-common"></ul>
+                            <div class="reason-title">차이점</div>
+                            <ul class="diff-list" id="r-diff"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 다른 추천 작품 -->
+        <div style="margin-top:36px">
+            <div style="font-size:15px;font-weight:600;margin-bottom:14px;letter-spacing:-0.3px;">
+                다른 추천 작품
+            </div>
+            <div class="rec-row" id="other-recs"></div>
+        </div>
+
+        <div style="margin-top:24px;display:flex;gap:10px;">
+            <button class="btn-outline" onclick="history.back()">← 추천 지도</button>
+            <button class="btn-outline" onclick="location.href='/'">처음으로</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const MOVIE_ID    = {{ movie_id }};
+    const IS_LOGGED_IN = {{ session.get('user_id') is not none | tojson }};
+    const likedIds    = JSON.parse(localStorage.getItem('liked_ids') || '[]');
+    const recs        = JSON.parse(localStorage.getItem('recommendations') || '[]');
+    let   inWatchlist = false;
+
+    /* ── 보고싶어요 토글 ── */
+    async function toggleWatchlist() {
+        if (!IS_LOGGED_IN) {
+            window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+            return;
+        }
+        const btn = document.getElementById('watchlist-btn');
+        btn.classList.add('loading');
+        try {
+            const res  = await fetch('/api/watchlist/' + MOVIE_ID, { method: 'POST' });
+            const data = await res.json();
+            inWatchlist = data.status === 'added';
+            updateWatchlistBtn();
+        } finally {
+            btn.classList.remove('loading');
+        }
+    }
+
+    function updateWatchlistBtn() {
+        const btn = document.getElementById('watchlist-btn');
+        if (inWatchlist) {
+            btn.innerHTML = '✓ 보고싶어요 추가됨';
+            btn.classList.add('added');
+        } else {
+            btn.innerHTML = '+ 보고싶어요';
+            btn.classList.remove('added');
+        }
+    }
+
+    function cleanTitle(t) { return t.replace(/,\s*(The|A|An)\b/i,'').replace(/\s*\(\d{4}\).*/,'').trim(); }
+    function getYear(t)    { const m = t.match(/\((\d{4})\)/); return m?m[1]:''; }
+    function starsHtml(r)  {
+        const full = Math.round(r / 5 * 5);
+        return '★'.repeat(full) + '☆'.repeat(5 - full);
+    }
+
+    function switchTab(name, btn) {
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    async function load() {
+        const fetches = [
+            fetch('/api/movie/' + MOVIE_ID),
+            fetch('/api/match/' + MOVIE_ID, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({liked_ids: likedIds})
+            }),
+        ];
+        if (IS_LOGGED_IN) fetches.push(fetch('/api/watchlist'));
+
+        const results   = await Promise.all(fetches);
+        const [movieRes, matchRes] = results;
+        const movie = await movieRes.json();
+        const match = await matchRes.json();
+
+        if (IS_LOGGED_IN && results[2]) {
+            const wl = await results[2].json();
+            if (!wl.error) {
+                inWatchlist = wl.some(item => item.movieId === MOVIE_ID);
+                updateWatchlistBtn();
+            }
+        }
+
+        // 포스터
+        const pw = document.getElementById('poster-wrap');
+        pw.innerHTML = movie.poster
+            ? `<img src="${movie.poster}" alt="">`
+            : `<div class="no-poster-m">${cleanTitle(movie.title)}</div>`;
+
+        // 기본 정보
+        document.getElementById('m-title').textContent  = cleanTitle(movie.title);
+        document.getElementById('m-year').textContent   = getYear(movie.title);
+        document.getElementById('m-studio').textContent = movie.studio !== 'other' ? movie.studio : (movie.culture||'');
+        document.getElementById('m-rating').textContent = movie.rating_mean.toFixed(1);
+        document.getElementById('m-stars').textContent  = starsHtml(movie.rating_mean);
+        document.getElementById('m-count').textContent  = `(${movie.rating_count.toLocaleString()}명 평가)`;
+        document.getElementById('m-overview').textContent = movie.overview || '줄거리 정보가 없어요.';
+
+        const genres    = (movie.genres||'').replace(/\|/g,', ').replace('Animation, ','');
+        const cultureKo = {japanese:'일본',western:'미국/서양',european:'유럽',korean:'한국',other:'기타'};
+        const clusters  = ['Ghibli','Pixar','Disney','DreamWorks/서양','일본(기타)','유럽','기타'];
+        document.getElementById('m-meta').innerHTML = `
+            <div class="meta-key">장르</div>    <div class="meta-val">${genres||'—'}</div>
+            <div class="meta-key">문화권</div>  <div class="meta-val">${cultureKo[movie.culture]||movie.culture}</div>
+            <div class="meta-key">클러스터</div><div class="meta-val">${clusters[movie.cluster]||'기타'}</div>`;
+
+        // 추천 이유
+        document.getElementById('r-pct').textContent = match.match + '%';
+        const commonEl = document.getElementById('r-common');
+        if (match.common_tags.length) {
+            match.common_tags.forEach(t => {
+                commonEl.insertAdjacentHTML('beforeend',
+                    `<li><span><span class="check">✓</span>${t.ko}</span><span class="score">${t.en}</span></li>`);
+            });
+        } else {
+            commonEl.insertAdjacentHTML('beforeend','<li style="color:var(--text-faint)">공통 태그를 찾지 못했어요</li>');
+        }
+        const diffEl = document.getElementById('r-diff');
+        if (match.diff.length) {
+            match.diff.forEach(d => { diffEl.insertAdjacentHTML('beforeend',`<li>${d}</li>`); });
+        } else {
+            diffEl.insertAdjacentHTML('beforeend','<li style="color:var(--text-faint)">비슷한 배경의 작품이에요</li>');
+        }
+
+        // 다른 추천 작품
+        const others = recs.filter(r => r.movieId !== MOVIE_ID).slice(0, 6);
+        const orEl   = document.getElementById('other-recs');
+        others.forEach(r => {
+            orEl.insertAdjacentHTML('beforeend', `
+                <div class="rec-card" onclick="location.href='/movie/${r.movieId}'">
+                    ${r.poster
+                        ? `<img src="${r.poster}" alt="" loading="lazy">`
+                        : `<div style="aspect-ratio:2/3;background:var(--tag-bg)"></div>`}
+                    <div class="rc-info">${cleanTitle(r.title)}</div>
+                </div>`);
+        });
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+    }
+
+    load();
+</script>
+{% endblock %}

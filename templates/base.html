@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AniMap{% block title %}{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:           #f5f2ff;
+            --surface:      #ffffff;
+            --text:         #1a1040;
+            --text-muted:   #6b5fa0;
+            --text-faint:   #a89fc8;
+            --accent:       #7b5cf0;
+            --accent-hover: #6344d4;
+            --accent-light: #ede8ff;
+            --border:       #e4dcff;
+            --tag-bg:       #f0ebff;
+            --step-done:    #8b7fba;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            font-size: 15px;
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── 네비게이션 ── */
+        .navbar {
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 40px;
+            height: 58px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-left { display: flex; align-items: center; gap: 40px; }
+
+        /* 핀 로고 */
+        .logo {
+            display: flex; align-items: center; gap: 7px;
+            font-size: 20px; font-weight: 700;
+            color: var(--text); text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+        .logo-pin { color: var(--accent); flex-shrink: 0; }
+        .logo em  { font-style: normal; color: var(--accent); }
+
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            font-size: 14px; color: var(--text-muted);
+            text-decoration: none; transition: color 0.15s; font-weight: 400;
+        }
+        .nav-links a:hover { color: var(--text); }
+
+        .nav-right { display: flex; align-items: center; gap: 14px; }
+
+        .nav-user-name { font-size: 14px; color: var(--text); font-weight: 500; }
+        .nav-user-name span { color: var(--accent); }
+
+        .nav-auth { display: flex; align-items: center; gap: 4px; }
+        .nav-auth a {
+            font-size: 13px; color: var(--text-muted);
+            text-decoration: none; padding: 5px 10px;
+            border-radius: 6px; transition: all 0.15s;
+        }
+        .nav-auth a:hover { color: var(--text); background: var(--accent-light); }
+        .nav-auth .sep { color: var(--border); font-size: 12px; }
+
+        .btn-signup-nav {
+            background: var(--accent) !important;
+            color: #fff !important;
+            padding: 6px 14px !important;
+            border-radius: 6px !important;
+        }
+        .btn-signup-nav:hover { background: var(--accent-hover) !important; }
+
+        /* ── 스텝 바 ── */
+        .steps-bar {
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 40px; height: 46px;
+            display: flex; align-items: center; gap: 0;
+            overflow-x: auto;
+        }
+        .steps-bar::-webkit-scrollbar { display: none; }
+
+        .step {
+            display: flex; align-items: center; gap: 7px;
+            font-size: 12px; color: var(--text-faint);
+            white-space: nowrap; letter-spacing: -0.2px;
+        }
+        .step .num {
+            width: 20px; height: 20px; border-radius: 50%;
+            border: 1.5px solid var(--border);
+            background: transparent;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 600;
+        }
+        .step.active { color: var(--accent); }
+        .step.active .num { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+        .step.done { color: var(--step-done); }
+        .step.done .num { border-color: var(--step-done); background: var(--step-done); color: #fff; }
+        .step-divider {
+            flex: 1; height: 1px; background: var(--border);
+            min-width: 12px; max-width: 36px; margin: 0 8px;
+        }
+
+        /* ── 공통 컴포넌트 ── */
+        .container { max-width: 920px; margin: 0 auto; padding: 48px 32px; }
+
+        .page-title { font-size: 24px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.5px; }
+        .page-sub   { font-size: 14px; color: var(--text-muted); margin-bottom: 32px; }
+
+        .card {
+            background: var(--surface); border-radius: 14px;
+            padding: 28px; border: 1px solid var(--border);
+        }
+
+        .btn-primary {
+            background: var(--accent); color: #fff; border: none;
+            padding: 11px 26px; border-radius: 8px;
+            font-size: 14px; font-weight: 500; cursor: pointer;
+            transition: background 0.15s; letter-spacing: -0.2px; font-family: inherit;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:disabled { background: #c5bbf0; cursor: not-allowed; }
+
+        .btn-outline {
+            background: transparent; color: var(--text-muted);
+            border: 1px solid var(--border); padding: 9px 18px;
+            border-radius: 8px; font-size: 14px; cursor: pointer;
+            transition: all 0.15s; font-family: inherit;
+        }
+        .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+        .tag-pill {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 10px; border-radius: 20px; font-size: 12px;
+            background: var(--tag-bg); color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 20px; }
+        .alert-error   { background: #fef2f2; color: #9b1c1c; border: 1px solid #fecaca; }
+        .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="nav-left">
+        <a href="/" class="logo">
+            <!-- 지도 핀 아이콘 -->
+            <svg class="logo-pin" viewBox="0 0 20 27" width="18" height="24" fill="none">
+                <path d="M10 0C4.477 0 0 4.477 0 10C0 17 10 27 10 27C10 27 20 17 20 10C20 4.477 15.523 0 10 0Z"
+                      fill="currentColor"/>
+                <circle cx="10" cy="10" r="4" fill="white"/>
+            </svg>
+            Ani<em>Map</em>
+        </a>
+        <div class="nav-links">
+            <a href="/map">추천 지도</a>
+            {% if session.get('user_id') %}
+            <a href="/mypage">내 기록</a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="nav-right">
+        {% if session.get('user_id') %}
+        <span class="nav-user-name"><span>{{ session.nickname }}</span>님</span>
+        <div class="nav-auth">
+            <a href="/mypage">마이페이지</a>
+            <span class="sep">|</span>
+            <a href="/logout">로그아웃</a>
+        </div>
+        {% else %}
+        <div class="nav-auth">
+            <a href="/login">로그인</a>
+            <span class="sep">|</span>
+            <a href="/signup" class="btn-signup-nav">회원가입</a>
+        </div>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="steps-bar">
+    {% set steps = [('조건 선택','/'),('평가','/rate'),('분석','/analyze'),('추천 지도','/map'),('작품 정보','#')] %}
+    {% for label, href in steps %}
+        {% set i   = loop.index %}
+        {% set cls = 'active' if i == current_step else ('done' if i < current_step else '') %}
+        <div class="step {{ cls }}">
+            <div class="num">{{ i }}</div>
+            <span>{{ label }}</span>
+        </div>
+        {% if not loop.last %}<div class="step-divider"></div>{% endif %}
+    {% endfor %}
+</div>
+
+{% block content %}{% endblock %}
+{% block script %}{% endblock %}
+</body>
+</html>

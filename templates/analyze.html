@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% set current_step = 3 %}
+
+{% block title %} — 분석{% endblock %}
+
+{% block head %}
+<style>
+    .analyze-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+
+    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .section-sub   { font-size: 12px; color: var(--text-faint); margin-bottom: 16px; }
+
+    /* 감정 바 */
+    .emotion-list { display: flex; flex-direction: column; gap: 11px; }
+    .emotion-row  { display: flex; align-items: center; gap: 10px; }
+    .emotion-name { font-size: 13px; font-weight: 500; width: 56px; flex-shrink: 0; }
+    .emotion-bar-bg {
+        flex: 1; height: 7px; border-radius: 4px;
+        background: var(--tag-bg); overflow: hidden;
+    }
+    .emotion-bar-fill { height: 100%; border-radius: 4px; transition: width 0.9s ease; }
+    .emotion-val { font-size: 12px; color: var(--text-faint); width: 28px; text-align: right; flex-shrink: 0; }
+
+    /* 태그 리스트 */
+    .tag-list { display: flex; flex-direction: column; gap: 7px; }
+    .tag-row {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 12px; border-radius: 7px; background: var(--bg);
+        border: 1px solid var(--border); font-size: 13px;
+    }
+    .tag-row .tag-ko { font-weight: 500; }
+    .tag-row .tag-en { color: var(--text-faint); font-size: 12px; }
+
+    /* 요약 */
+    .summary-box {
+        background: var(--bg); border-radius: 8px; padding: 18px;
+        font-size: 14px; line-height: 1.8; color: var(--text-muted);
+        border-left: 3px solid var(--accent);
+    }
+
+    .nav-buttons {
+        display: flex; justify-content: space-between; align-items: center; margin-top: 22px;
+    }
+    .loading-msg { text-align: center; padding: 60px; color: var(--text-faint); font-size: 14px; }
+
+    @media (max-width: 640px) {
+        .analyze-grid { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title">취향 분석 결과</h1>
+    <p class="page-sub">평가하신 작품들을 기반으로 취향을 분석했어요</p>
+
+    <div id="loading" class="loading-msg">분석 중…</div>
+
+    <div id="result" style="display:none">
+        <div class="analyze-grid">
+            <div class="card">
+                <div class="section-title">감정 클러스터</div>
+                <div class="section-sub">좋아하는 감정의 결을 분석했어요</div>
+                <div class="emotion-list" id="emotion-list"></div>
+            </div>
+            <div class="card">
+                <div class="section-title">주요 선호 태그</div>
+                <div class="section-sub">자주 나타나는 키워드예요</div>
+                <div class="tag-list" id="tag-list"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="section-title" style="margin-bottom:10px;">분석 요약</div>
+            <div class="summary-box" id="summary"></div>
+        </div>
+
+        <div class="nav-buttons">
+            <button class="btn-outline" onclick="history.back()">← 다시 평가</button>
+            <button class="btn-primary" onclick="location.href='/map'">추천 지도 보기 →</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+    const IS_LOGGED_IN = {{ session.get('user_id') is not none | tojson }};
+    const ratings = JSON.parse(localStorage.getItem('ratings') || '{}');
+
+    const EMOTION_COLORS = {
+        '따뜻함':'#e07b54', '깊이':'#6b7c8f',
+        '경이로움':'#c9a84c', '성장':'#5a8f6b',
+        '우울함':'#9e9e9e', '모험':'#7b6fa0'
+    };
+
+    async function run() {
+        if (!Object.keys(ratings).length) {
+            document.getElementById('loading').textContent = '평가한 작품이 없어요. 평가 페이지로 돌아가주세요.';
+            return;
+        }
+
+        const [analyzeRes, recRes] = await Promise.all([
+            fetch('/api/analyze', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ratings})
+            }),
+            fetch('/api/recommend', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    liked_ids: Object.entries(ratings).filter(([,v])=>v>=4).map(([k])=>parseInt(k))
+                })
+            })
+        ]);
+
+        const data = await analyzeRes.json();
+        const recs = await recRes.json();
+
+        const liked = Object.entries(ratings).filter(([,v])=>v>=4).map(([k])=>parseInt(k));
+        localStorage.setItem('recommendations', JSON.stringify(recs));
+        localStorage.setItem('liked_ids', JSON.stringify(liked));
+
+        // 로그인 상태면 평가 기록 서버에 저장
+        if (IS_LOGGED_IN) {
+            fetch('/api/save_ratings', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ratings})
+            }).catch(() => {});
+        }
+
+        // 감정 바 렌더링
+        const el = document.getElementById('emotion-list');
+        Object.entries(data.emotion_scores).forEach(([name, val]) => {
+            const color = EMOTION_COLORS[name] || '#888';
+            el.insertAdjacentHTML('beforeend', `
+                <div class="emotion-row">
+                    <div class="emotion-name">${name}</div>
+                    <div class="emotion-bar-bg">
+                        <div class="emotion-bar-fill" style="background:${color};width:${val*100}%"></div>
+                    </div>
+                    <div class="emotion-val">${val}</div>
+                </div>`);
+        });
+
+        // 태그 리스트
+        const tl = document.getElementById('tag-list');
+        data.top_tags.forEach(t => {
+            tl.insertAdjacentHTML('beforeend', `
+                <div class="tag-row">
+                    <span class="tag-ko">${t.ko}</span>
+                    <span class="tag-en">${t.en}</span>
+                </div>`);
+        });
+
+        // 요약 텍스트
+        const topEmotion = Object.entries(data.emotion_scores).sort((a,b)=>b[1]-a[1]);
+        const first  = topEmotion[0]?.[0] || '';
+        const second = topEmotion[1]?.[0] || '';
+        const tag1   = data.top_tags[0]?.ko || '';
+        const tag2   = data.top_tags[1]?.ko || '';
+        document.getElementById('summary').textContent =
+            `'${first}'과 '${second}' 감성이 강한 작품을 좋아하시는군요. ` +
+            `특히 '${tag1}'와 '${tag2}' 요소가 포함된 작품에 높은 평점을 주셨어요. ` +
+            `추천 지도에서 비슷한 취향의 작품들을 확인해보세요.`;
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('result').style.display  = 'block';
+    }
+
+    run();
+</script>
+{% endblock %}

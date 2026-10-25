@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AniMap - 추천 결과</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0f1a; color: #fff; min-height: 100vh; }
+
+        header {
+            padding: 20px 40px; border-bottom: 1px solid #2a2a3e;
+            display: flex; align-items: center; gap: 20px;
+        }
+        header h1 { font-size: 24px; color: #7c6aff; letter-spacing: 2px; }
+        .back-btn {
+            color: #888; text-decoration: none; font-size: 13px;
+            border: 1px solid #2a2a3e; padding: 5px 12px; border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .back-btn:hover { color: #fff; border-color: #555; }
+
+        .container { max-width: 1200px; margin: 36px auto; padding: 0 40px; }
+        h2 { font-size: 20px; margin-bottom: 6px; }
+        .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
+
+        .movie-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 18px;
+        }
+
+        .movie-card {
+            border-radius: 12px; overflow: hidden;
+            background: #1a1a2e; border: 1px solid #2a2a3e;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .movie-card:hover { transform: translateY(-4px); border-color: #3a3a5e; }
+
+        .movie-card img {
+            width: 100%; aspect-ratio: 2/3; object-fit: cover;
+            display: block; background: #2a2a3e;
+        }
+        .no-poster {
+            width: 100%; aspect-ratio: 2/3; background: #2a2a3e;
+            display: flex; align-items: center; justify-content: center;
+            color: #555; font-size: 12px; text-align: center; padding: 12px;
+        }
+
+        .movie-info { padding: 12px; }
+        .movie-title { font-size: 13px; font-weight: 600; line-height: 1.4; margin-bottom: 5px; }
+        .movie-year { font-size: 11px; color: #666; }
+        .movie-rating { color: #f0b429; font-size: 12px; margin-top: 4px; }
+
+        .cluster-badge {
+            display: inline-block; margin-top: 6px;
+            padding: 2px 8px; border-radius: 4px; font-size: 11px;
+            background: #1e1e38; color: #7c6aff; border: 1px solid #2a2a4e;
+        }
+
+        .overview {
+            font-size: 11px; color: #777; margin-top: 6px;
+            line-height: 1.5; display: -webkit-box;
+            -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        .actions {
+            display: flex; gap: 12px; margin-top: 40px; justify-content: center;
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            padding: 11px 24px; border-radius: 10px; font-size: 14px;
+            cursor: pointer; transition: all 0.2s; text-decoration: none;
+            border: 1px solid #2a2a3e; color: #888; background: transparent;
+        }
+        .action-btn:hover { border-color: #7c6aff; color: #7c6aff; }
+        .action-btn.primary { background: #7c6aff; border-color: #7c6aff; color: #fff; }
+        .action-btn.primary:hover { background: #6a59e0; }
+
+        .msg { text-align: center; padding: 80px; color: #888; font-size: 14px; }
+        .msg a { color: #7c6aff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/rate" class="back-btn">← 다시 선택</a>
+        <h1>AniMap</h1>
+    </header>
+
+    <div class="container">
+        <h2>추천 애니메이션</h2>
+        <p class="subtitle">선택하신 작품을 바탕으로 취향에 맞는 작품을 찾았어요</p>
+
+        <div class="movie-grid" id="movie-grid">
+            <div class="msg" style="grid-column:1/-1">불러오는 중...</div>
+        </div>
+
+        <div class="actions" id="actions" style="display:none">
+            <a href="/rate" class="action-btn primary">다시 선택해서 추천 받기</a>
+            <a href="/" class="action-btn">처음으로</a>
+        </div>
+    </div>
+
+    <script>
+        const CLUSTER_NAMES = {
+            0: 'Ghibli', 1: 'Pixar', 2: 'Disney',
+            3: 'DreamWorks/서양', 4: '일본(기타)', 5: '유럽', 6: '기타'
+        };
+
+        function cleanTitle(t) {
+            return t.replace(/,\s*(The|A|An)\s*(\(|$)/i, ' $1$2')
+                    .replace(/\s*\(\d{4}\).*$/, '').trim();
+        }
+        function getYear(t) {
+            const m = t.match(/\((\d{4})\)/);
+            return m ? m[1] : '';
+        }
+
+        const results = JSON.parse(localStorage.getItem('recommendations') || '[]');
+        const grid = document.getElementById('movie-grid');
+
+        if (!results.length) {
+            grid.innerHTML = '<div class="msg" style="grid-column:1/-1">추천 결과가 없어요. <a href="/rate">다시 선택</a>해보세요.</div>';
+        } else {
+            grid.innerHTML = results.map(m => `
+                <div class="movie-card">
+                    ${m.poster
+                        ? `<img src="${m.poster}" alt="" loading="lazy" onerror="this.outerHTML='<div class=no-poster>${cleanTitle(m.title)}</div>'">`
+                        : `<div class="no-poster">${cleanTitle(m.title)}</div>`
+                    }
+                    <div class="movie-info">
+                        <div class="movie-title">${cleanTitle(m.title)}</div>
+                        <div class="movie-year">${getYear(m.title)}</div>
+                        <div class="movie-rating">★ ${m.rating_mean.toFixed(1)}</div>
+                        <span class="cluster-badge">${CLUSTER_NAMES[m.cluster] ?? '기타'}</span>
+                        ${m.overview ? `<div class="overview">${m.overview}</div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('actions').style.display = 'flex';
+        }
+    </script>
+</body>
+</html>

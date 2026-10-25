@@ -1,0 +1,30 @@
+[studio]
+  pixar: 1278
+  disney: 1270
+  studio ghibli: 717
+  dreamworks: 178
+  disney animated feature: 123
+  aardman: 102
+  pixar animation: 51
+  aardman studios: 26
+  disney classics: 25
+  disney renaissance: 22
+  dreamworks animation: 15
+
+[country]
+  japan: 343
+  british: 36
+  japanese: 32
+  japanese influence: 22
+  british comedy: 21
+  french: 18
+
+[person]
+  hayao miyazaki: 535
+  miyazaki: 76
+  voice acting: 24
+  woman director: 21
+  makoto shinkai: 19
+  mamoru hosoda: 18
+  directorial debut: 16
+
