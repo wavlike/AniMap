@@ -304,6 +304,19 @@ python app.py
 > **TMDb API 키**는 `scripts/06_tmdb_fetch.py`, `scripts/07_classify_style.py`의 `TMDB_API_KEY` 변수에 입력하세요.
 > `users.db`(SQLite)는 서버 첫 실행 시 자동 생성됩니다.
 
+## 배포 (Render)
+
+Flask 서버이므로 GitHub Pages(정적 호스팅)로는 실행할 수 없고, GitHub 저장소와 연동되는 [Render](https://render.com)로 배포합니다.
+저장소 루트의 `render.yaml`, `requirements.txt`에 설정이 들어 있습니다.
+
+1. Render에 GitHub 계정으로 가입
+2. **New → Blueprint** → `wavlike/AniMap` 저장소 선택 → **Apply**
+3. 빌드가 끝나면 `https://animap-xxxx.onrender.com` 형태의 주소로 접속
+
+- `main`에 push하면 자동으로 재배포됩니다.
+- 무료 플랜은 15분간 접속이 없으면 잠들어, 다음 첫 접속 시 30초~1분 정도 걸립니다.
+- 무료 플랜의 디스크는 재배포·재시작 시 초기화되므로 `users.db`(회원·평점 데이터)가 유지되지 않습니다. 회원 데이터를 계속 보관하려면 외부 DB(Supabase 등)로 옮겨야 합니다.
+
 ## 프로젝트 구조
 
 ```

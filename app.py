@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, jsonify, render_template, request, session, redirect
 import json
+import os
 import sqlite3
 import numpy as np
 import pandas as pd
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = 'animap_secret_2024_!@#$'
+app.secret_key = os.environ.get('SECRET_KEY', 'animap_secret_2024_!@#$')
 
 DB_PATH = 'users.db'
 
